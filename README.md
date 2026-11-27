@@ -5,17 +5,18 @@ writes and verifies SPI flash, and flashes MCU firmware.
 
 ## Status
 
-The repository is a skeleton: there is no protocol, no serial port and no radio code yet.
-The milestones below are what turns it into a tool.
-Background on the existing third-party implementations is in [`docs/`](docs/README.md).
+The port, the frame layer and the whole-image `--backup` are in place: every
+reply is checked and every block is retried before the run fails. Restore and
+the firmware path are not written yet. Background on the existing third-party
+implementations is in [`docs/`](docs/README.md).
 
 | # | Milestone | Scope |
 |---|-----------|-------|
-| 1 | transport | frame building, checksum, ACK/timeout classification, tests over recorded frames |
-| 2 | `dump` | linear 4 MiB read, per-block checksum, progress, final SHA-256 |
+| 1 | transport | frame building, checksum, ACK/timeout classification — done; tests over recorded frames still to come |
+| 2 | `backup` | linear 4 MiB read, per-block checksum, progress, SHA-256 — done |
 | 3 | `restore` | region-at-a-time write with `--verify` read-back |
 | 4 | `firmware flash`, `firmware backup` | MCU erase and 1 KiB block writes; backup is conditional on the bootloader exposing MCU reads at all |
-| 5 | harness | dump, restore, dump; compare the regions the protocol can write |
+| 5 | harness | backup, restore, backup; compare the regions the protocol can write |
 
 ## Why
 
@@ -42,6 +43,19 @@ formatting and static-analysis gates.
 ## Usage
 
 ```sh
-$ ./bin/rt4d-cli
-hello world
+$ ./bin/rt4d-cli -p /dev/ttyUSB0 --check
+INFO: opened /dev/ttyUSB0: 115200 baud, 8N1, no flow control, 5000 ms reply deadline
+INFO: closed /dev/ttyUSB0
+
+$ ./bin/rt4d-cli -p /dev/ttyUSB0 --backup -o rt4d-backup.bin
+INFO: backing up 4 MiB from /dev/ttyUSB0 to rt4d-backup.bin
+INFO: 1 of 4 MiB
+...
+INFO: 4194304 bytes in 376.8 s (10.9 KiB/s)
+INFO: sha256 7dd15d02...
 ```
+
+`sha256sum rt4d-backup.bin` prints the same digest, and `cmp` compares two
+backups byte for byte. A backup that fails part way leaves the partial image on
+disk and exits non-zero, so the exit code, not the file, says whether it is
+complete.

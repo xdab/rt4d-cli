@@ -1,6 +1,8 @@
 # rt4d-cli: one binary, one job per verb, nothing beyond libc and POSIX.
 CC ?= cc
-CFLAGS := -std=c11 -O2 -Wall -Wextra -Wpedantic -I./include
+# POSIX 2008 exposes poll(), clock_gettime() and the termios calls the
+# transport needs; plain -std=c11 hides them behind a feature-test macro
+CFLAGS := -std=c11 -O2 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L -I./include
 LDLIBS :=
 
 SRC_DIR := src

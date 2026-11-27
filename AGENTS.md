@@ -4,28 +4,29 @@
 
 ## State
 
-The only code is `src/main.c`, which prints one line: no transport, no frame
-builder, no SPI and no firmware path. The Makefile, `.clang-format` and
-`.clang-tidy` are in place and their gates pass, so the skeleton a module plugs
-into is real. `include/` appears with the first module, `tests/` with milestone
-1 (transport plus `dump`). `docs/` already holds one technical summary per
-reference implementation, indexed by `docs/README.md`.
+The read path is real: `uart.c` opens a raw 115200 8N1 port and moves exact byte
+counts under a deadline, `frame.c` builds the `52` block read and checks its
+reply, `spi.c` walks the 4 MiB image with three attempts per block, and
+`main.c` parses options and runs `--check` or `--backup`. `logging.c` is the
+stderr logger; `sha256.c` is Brad Conte's public-domain SHA-256, vendored whole
+with its notice. Nothing writes yet: `--restore`, the region table and the
+firmware path are still to come. `tests/` is still empty; the read path was
+exercised on a pseudo-terminal with a scripted radio, which is not a substitute
+for the recorded-frame tests of milestone 1.
 
 ## Layout
 
 | Path | Holds |
 |------|-------|
-| `src/` | C sources, one module per file pair; currently `main.c` only |
-| `include/` | the matching `X.h`, with the project's documentation (planned) |
+| `src/` | C sources, one module per file pair: `main.c` (verb dispatch), `options.c`, `uart.c`, `frame.c`, `spi.c`, `logging.c`, `sha256.c` (vendored) |
+| `include/` | the matching `X.h`, with the project's documentation |
 | `tests/` | unit tests over recorded frames and image files, no radio needed (planned) |
 | `tools/` | helper scripts around the binary — fixture capture, analysis (planned) |
 | `docs/` | one summary per third-party implementation, plus its `README.md` index |
 | `obj/`, `bin/` | build output, gitignored |
 
-One binary, `bin/rt4d-cli`. Modules still to come: `uart.c` (open/close the port,
-byte accurate read/write, timeouts), `frame.c` (frame building, checksum, ACK
-versus timeout versus corruption), `spi.c` (SPI region table, dump, restore),
-`firmware.c` (MCU erase and block writes), `logging.c` (stderr `log_*`).
+One binary, `bin/rt4d-cli`. Still to come: `spi.c`'s region table and restore
+half, `firmware.c` (MCU erase and block writes), `tests/`.
 
 ## Build and gates
 
