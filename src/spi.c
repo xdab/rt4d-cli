@@ -32,7 +32,7 @@ static struct attempt read_block(struct uart *u, unsigned block, unsigned char *
     unsigned char request[FRAME_REQUEST_BYTES];
     size_t moved = 0;
 
-    a.io = uart_write(u, request, frame_read_request(block, request), &moved);
+    a.io = uart_write(u, request, frame_read_request(block, FRAME_SEED_SPI, request), &moved);
     if (a.io != UART_OK)
     {
         a.moved = moved;
@@ -226,7 +226,8 @@ write_chunk(struct uart *u, unsigned char command, unsigned index, const unsigne
     struct write_result w = {.io = UART_OK, .moved = 0, .ack = 0};
     unsigned char frame[FRAME_WRITE_BYTES];
 
-    w.io = uart_write(u, frame, frame_write_request(command, index, data, frame), &w.moved);
+    w.io = uart_write(
+        u, frame, frame_write_request(command, index, FRAME_SEED_SPI, data, frame), &w.moved);
     if (w.io != UART_OK)
         return w;
 

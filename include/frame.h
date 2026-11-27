@@ -23,6 +23,17 @@
 
 /** Command byte of a block read. */
 #define FRAME_CMD_READ_SPI 0x52
+/** Command byte of an MCU firmware write, and of the two erase frames. */
+#define FRAME_CMD_WRITE_FW 0x57
+#define FRAME_CMD_ERASE_FW 0x39
+
+/** Checksum seed of every SPI frame. */
+#define FRAME_SEED_SPI 0x00u
+/** Checksum seed of the bootloader's frames. */
+#define FRAME_SEED_FIRMWARE 0x48u
+
+/** Bytes of an erase frame: command, two fixed bytes, the part, the checksum. */
+#define FRAME_ERASE_BYTES 5u
 
 /** The single byte a successful write is answered with. */
 #define FRAME_ACK 0x06
@@ -37,7 +48,11 @@
 unsigned char frame_checksum(const unsigned char *bytes, size_t len);
 
 /** Build `52 blkH blkL checksum` for @p block; returns the frame length. */
-size_t frame_read_request(unsigned block, unsigned char out[FRAME_REQUEST_BYTES]);
+size_t
+frame_read_request(unsigned block, unsigned char seed, unsigned char out[FRAME_REQUEST_BYTES]);
+
+/** Build `39 33 05 part checksum` for one half of the MCU erase. */
+size_t frame_erase_request(unsigned char part, unsigned char out[FRAME_ERASE_BYTES]);
 
 /**
  * Build `command idxH idxL data checksum` for one block of @p data.
@@ -48,6 +63,7 @@ size_t frame_read_request(unsigned block, unsigned char out[FRAME_REQUEST_BYTES]
 size_t frame_write_request(
     unsigned char command,
     unsigned index,
+    unsigned char seed,
     const unsigned char *data,
     unsigned char out[FRAME_WRITE_BYTES]);
 

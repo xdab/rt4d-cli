@@ -15,13 +15,26 @@ unsigned char frame_checksum(const unsigned char *bytes, size_t len)
     return (unsigned char)(sum & 0xFFu);
 }
 
-size_t frame_read_request(unsigned block, unsigned char out[FRAME_REQUEST_BYTES])
+// NOLINTBEGIN(bugprone-easily-swappable-parameters) // block and seed are wire fields
+size_t
+frame_read_request(unsigned block, unsigned char seed, unsigned char out[FRAME_REQUEST_BYTES])
 {
     out[0] = FRAME_CMD_READ_SPI;
     out[1] = (unsigned char)((block >> 8) & 0xFFu);
     out[2] = (unsigned char)(block & 0xFFu);
-    out[3] = frame_checksum(out, 3);
+    out[3] = (unsigned char)((frame_checksum(out, 3) + seed) & 0xFFu);
     return FRAME_REQUEST_BYTES;
+}
+// NOLINTEND(bugprone-easily-swappable-parameters)
+
+size_t frame_erase_request(unsigned char part, unsigned char out[FRAME_ERASE_BYTES])
+{
+    out[0] = FRAME_CMD_ERASE_FW;
+    out[1] = 0x33;
+    out[2] = 0x05;
+    out[3] = part;
+    out[4] = (unsigned char)((frame_checksum(out, 4) + FRAME_SEED_FIRMWARE) & 0xFFu);
+    return FRAME_ERASE_BYTES;
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters) // (len, request) are the check's input
@@ -63,6 +76,7 @@ const char *frame_reply_status_name(enum frame_reply_status status)
 size_t frame_write_request(
     unsigned char command,
     unsigned index,
+    unsigned char seed,
     const unsigned char *data,
     unsigned char out[FRAME_WRITE_BYTES])
 {
@@ -70,7 +84,8 @@ size_t frame_write_request(
     out[1] = (unsigned char)((index >> 8) & 0xFFu);
     out[2] = (unsigned char)(index & 0xFFu);
     (void)memcpy(out + 3, data, FRAME_BLOCK_BYTES);
-    out[FRAME_WRITE_BYTES - 1] = frame_checksum(out, FRAME_WRITE_BYTES - 1);
+    out[FRAME_WRITE_BYTES - 1] =
+        (unsigned char)((frame_checksum(out, FRAME_WRITE_BYTES - 1) + seed) & 0xFFu);
     return FRAME_WRITE_BYTES;
 }
 // NOLINTEND(bugprone-easily-swappable-parameters)

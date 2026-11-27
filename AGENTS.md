@@ -4,29 +4,31 @@
 
 ## State
 
-The read path is real: `uart.c` opens a raw 115200 8N1 port and moves exact byte
-counts under a deadline, `frame.c` builds the `52` block read and checks its
-reply, `spi.c` walks the 4 MiB image with three attempts per block, and
-`main.c` parses options and runs `--check` or `--backup`. `logging.c` is the
-stderr logger; `sha256.c` is Brad Conte's public-domain SHA-256, vendored whole
-with its notice. Nothing writes yet: `--restore`, the region table and the
-firmware path are still to come. `tests/` is still empty; the read path was
-exercised on a pseudo-terminal with a scripted radio, which is not a substitute
-for the recorded-frame tests of milestone 1.
+The SPI jobs are real: `uart.c` opens a raw 115200 8N1 port and moves exact byte
+counts under a deadline, `frame.c` builds the `52` block read and the region
+write frame and checks both replies, `spi.c` backs up the 4 MiB image block by
+block and restores it region by region from a table of the commands the radio
+knows, and `main.c` dispatches `--check`, `--backup` and `--restore`.
+`firmware.c` writes an MCU image through the bootloader: probe, two erase
+frames, then 246 acknowledged 1 KiB blocks. `logging.c` is the stderr logger;
+`sha256.c` is Brad Conte's public-domain SHA-256, vendored whole with its
+notice.
+`tests/` drives the binary over a pseudo-terminal against a model of the radio's
+flash, under unittest and ruff.
 
 ## Layout
 
 | Path | Holds |
 |------|-------|
-| `src/` | C sources, one module per file pair: `main.c` (verb dispatch), `options.c`, `uart.c`, `frame.c`, `spi.c`, `logging.c`, `sha256.c` (vendored) |
-| `include/` | the matching `X.h`, with the project's documentation |
-| `tests/` | unit tests over recorded frames and image files, no radio needed (planned) |
+| `src/` | C sources, one module per file pair: `main.c` (verb dispatch), `options.c`, `uart.c`, `frame.c`, `spi.c` (region table, backup, restore), `firmware.c` (bootloader probe, erase, block writes), `logging.c`, `sha256.c` (vendored) |
+| `include/` | the matching `X.h`; the protocol rules live here and are the copy of record |
+| `tests/` | a model of the radio's flash and the backup/restore tests, no radio needed |
 | `tools/` | helper scripts around the binary — fixture capture, analysis (planned) |
 | `docs/` | one summary per third-party implementation, plus its `README.md` index |
 | `obj/`, `bin/` | build output, gitignored |
 
-One binary, `bin/rt4d-cli`. Still to come: `spi.c`'s region table and restore
-half, `firmware.c` (MCU erase and block writes), `tests/`.
+One binary, `bin/rt4d-cli`. `tools/` is the only planned directory still
+missing; no protocol path is left unimplemented.
 
 ## Build and gates
 
@@ -65,6 +67,15 @@ that sum with `0x48`. A successful write is answered with the single byte
   sector; `make test` fails if one is ever sent.
 - A wrong ACK byte is the radio refusing the chunk: stop and say so. A timeout or
   a short reply is a line fault: drain and retry.
+- The bootloader's frames carry the same sum seeded with `0x48`, the probe
+  included; the probe is the block-0 read, and a radio in firmware mode answers
+  `0xFF` where a block would start `52`.
+- Erase is two frames, `39 33 05 10` then `39 33 05 55`. What separates the
+  halves is not known; both are sent because that order is known to work.
+- A firmware write offset is the low 16 bits of the byte offset, so it wraps
+  every 64 KiB and the bootloader counts blocks itself.
+- MCU flash cannot be read back. A firmware flash is evidenced by one
+  acknowledgement per block and nothing else; never describe it as verified.
 - The region table is measured fact: it belongs in `spi.c` / `include/spi.h`, and
   it changes only with a fresh dump and read-back as evidence.
 

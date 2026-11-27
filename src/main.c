@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "firmware.h"
 #include "logging.h"
 #include "options.h"
 #include "sha256.h"
@@ -81,8 +82,8 @@ static int run_backup(const struct options *o)
     return 0;
 }
 
-// the whole image, or NULL after saying why
-static unsigned char *read_image(const char *path)
+// up to @p max bytes of @p path, or NULL after saying why
+static unsigned char *read_file(const char *path, size_t max, size_t *len)
 {
     FILE *f = fopen(path, "rb");
     if (!f)
@@ -91,39 +92,47 @@ static unsigned char *read_image(const char *path)
         return NULL;
     }
 
-    unsigned char *image = malloc(SPI_IMAGE_BYTES);
-    if (!image)
+    unsigned char *data = malloc(max);
+    if (!data)
     {
-        log_error("cannot hold %lu bytes: %s\n", SPI_IMAGE_BYTES, strerror(errno));
+        log_error("cannot hold %zu bytes: %s\n", max, strerror(errno));
         (void)fclose(f);
         return NULL;
     }
 
-    size_t got = fread(image, 1, SPI_IMAGE_BYTES, f);
+    *len = fread(data, 1, max, f);
     int extra = fgetc(f) != EOF;
     int failed = ferror(f) != 0;
     (void)fclose(f);
 
-    if (failed || extra || got != SPI_IMAGE_BYTES)
+    if (failed)
     {
-        log_error(
-            "%s is not a %lu MiB image: %zu bytes%s\n",
-            path,
-            SPI_IMAGE_BYTES / (1024ul * 1024ul),
-            got,
-            extra ? " and more" : "");
-        free(image);
+        log_error("cannot read %s: %s\n", path, strerror(errno));
+        free(data);
+        return NULL;
+    }
+    if (extra)
+    {
+        log_error("%s is larger than %zu bytes\n", path, max);
+        free(data);
         return NULL;
     }
 
-    return image;
+    return data;
 }
 
 static int run_restore(const struct options *o)
 {
-    unsigned char *image = read_image(o->input);
+    size_t len = 0;
+    unsigned char *image = read_file(o->input, SPI_IMAGE_BYTES, &len);
     if (!image)
         return 1;
+    if (len != SPI_IMAGE_BYTES)
+    {
+        log_error("%s is not a 4 MiB image: %zu bytes\n", o->input, len);
+        free(image);
+        return 1;
+    }
 
     char hex[SHA256_HEX_SIZE];
     unsigned char digest[SHA256_BLOCK_SIZE];
@@ -142,7 +151,32 @@ static int run_restore(const struct options *o)
         return 1;
     }
 
-    int failed = spi_restore(&u, image, SPI_IMAGE_BYTES, o->calibration) != 0;
+    int failed = spi_restore(&u, image, len, o->calibration) != 0;
+
+    uart_close(&u);
+    free(image);
+
+    return failed ? 1 : 0;
+}
+
+static int run_firmware(const struct options *o)
+{
+    size_t len = 0;
+    unsigned char *image = read_file(o->input, FW_IMAGE_BYTES, &len);
+    if (!image)
+        return 1;
+
+    log_info("flashing %s (%zu bytes) over %s\n", o->input, len, o->port);
+
+    struct uart u;
+    if (uart_open(&u, o->port, o->rate, o->timeout_ms) != 0)
+    {
+        log_error("cannot open %s: %s\n", o->port, strerror(errno));
+        free(image);
+        return 1;
+    }
+
+    int failed = firmware_flash(&u, image, len) != 0;
 
     uart_close(&u);
     free(image);
@@ -165,6 +199,8 @@ int main(int argc, char **argv)
         return run_backup(&o);
     case ACTION_RESTORE:
         return run_restore(&o);
+    case ACTION_FIRMWARE:
+        return run_firmware(&o);
     case ACTION_NONE:
         break; // rejected by options_parse()
     }

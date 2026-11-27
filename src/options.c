@@ -24,6 +24,7 @@ enum
     OPT_CHECK,
     OPT_BACKUP,
     OPT_RESTORE,
+    OPT_FIRMWARE,
     OPT_CALIBRATION,
 };
 
@@ -35,15 +36,18 @@ static void usage(void)
                  "\n"
                  "Use:\t" APP_NAME " -p DEVICE --backup -o FILE\n"
                  "\t" APP_NAME " -p DEVICE --restore -i FILE\n"
+                 "\t" APP_NAME " -p DEVICE --firmware -i FILE\n"
                  "\t" APP_NAME " -p DEVICE --check\n"
                  "\t--backup           read the whole 4 MiB SPI flash into -o FILE\n"
                  "\t--restore          write -i FILE back region by region, then read\n"
                  "\t                   every written byte back and compare it\n"
+                 "\t--firmware         write -i FILE into the MCU's flash; switch the\n"
+                 "\t                   radio off, then on with PTT held first\n"
                  "\t--check            open the port, report its settings, close it;\n"
                  "\t                   sends nothing to the radio\n"
                  "\t-p, --port DEVICE  serial port the radio is on (/dev/ttyUSB0)\n"
                  "\t-o, --output FILE  --backup destination, overwritten\n"
-                 "\t-i, --input FILE   --restore source, a whole 4 MiB dump\n"
+                 "\t-i, --input FILE   --restore or --firmware source\n"
                  "\t    --calibration  --restore also writes region 0x40, whose bytes\n"
                  "\t                   differ between radios\n"
                  "\t-t, --timeout SEC  reply deadline in seconds (default: 5; a bare\n"
@@ -132,6 +136,7 @@ enum options_status options_parse(int argc, char **argv, struct options *o)
         {"check", no_argument, NULL, OPT_CHECK},
         {"backup", no_argument, NULL, OPT_BACKUP},
         {"restore", no_argument, NULL, OPT_RESTORE},
+        {"firmware", no_argument, NULL, OPT_FIRMWARE},
         {"calibration", no_argument, NULL, OPT_CALIBRATION},
         {"timeout", required_argument, NULL, 't'},
         {"baud", required_argument, NULL, OPT_BAUD},
@@ -161,6 +166,9 @@ enum options_status options_parse(int argc, char **argv, struct options *o)
             break;
         case OPT_RESTORE:
             o->action = ACTION_RESTORE;
+            break;
+        case OPT_FIRMWARE:
+            o->action = ACTION_FIRMWARE;
             break;
         case OPT_CALIBRATION:
             o->calibration = 1;
@@ -200,14 +208,14 @@ enum options_status options_parse(int argc, char **argv, struct options *o)
         log_error("no output file given (use -o FILE)\n");
         return OPTIONS_USAGE;
     }
-    if (o->action == ACTION_RESTORE && !o->input)
+    if ((o->action == ACTION_RESTORE || o->action == ACTION_FIRMWARE) && !o->input)
     {
         log_error("no input file given (use -i FILE)\n");
         return OPTIONS_USAGE;
     }
-    if (o->action != ACTION_RESTORE && o->input)
+    if (o->action != ACTION_RESTORE && o->action != ACTION_FIRMWARE && o->input)
     {
-        log_error("input is only used by --restore\n");
+        log_error("input is only used by --restore and --firmware\n");
         return OPTIONS_USAGE;
     }
     if (o->action != ACTION_RESTORE && o->calibration)

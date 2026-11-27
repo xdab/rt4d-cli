@@ -48,6 +48,16 @@ disk and exits non-zero, so the exit code, not the file, says whether it is
 complete.
 
 ```sh
+$ ./bin/rt4d-cli -p /dev/ttyUSB0 --firmware -i rt4d.bin
+INFO: flashing rt4d.bin (251904 bytes) over /dev/ttyUSB0
+INFO: the radio is in its firmware mode
+INFO: MCU flash erased
+INFO: writing 246 blocks of 1024 bytes
+...
+INFO: 246 blocks acknowledged; MCU flash cannot be read back, so the count is the evidence
+```
+
+```sh
 $ ./bin/rt4d-cli -p /dev/ttyUSB0 --restore -i rt4d-backup.bin
 INFO: restoring rt4d-backup.bin (sha256 7dd15d02...) to /dev/ttyUSB0
 INFO: the radio already holds this image at block 0
@@ -69,3 +79,15 @@ address, so those ranges are left as they are and listed at the end.
 The calibration sector is region `0x40` and differs between units, so a restore
 skips it unless `--calibration` is given. Writing it is how a radio's own
 calibration is put back.
+
+## Firmware
+
+`--firmware -i FILE` writes an MCU image through the radio's bootloader: switch
+the radio off, then on with PTT held. The image is at most 251,904 bytes and a
+shorter one is padded with zeros, because the whole region is always written: a
+probe, two erase frames, then 246 blocks of 1 KiB, each acknowledged.
+
+MCU flash cannot be read back, so a flash is checked by what it is — one
+acknowledgement per block, and a count. The tool says that rather than implying
+a comparison it did not make, and an interrupted run says the MCU may hold a
+partial image.

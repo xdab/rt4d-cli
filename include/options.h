@@ -18,6 +18,7 @@ enum action
     ACTION_CHECK,
     ACTION_BACKUP,
     ACTION_RESTORE,
+    ACTION_FIRMWARE,
 };
 
 /** A parsed command line, ready to run. */
@@ -26,7 +27,7 @@ struct options
     enum action action;
     const char *port;    /**< serial device, required by every action */
     const char *output;  /**< --backup destination, NULL otherwise */
-    const char *input;   /**< --restore source, NULL otherwise */
+    const char *input;   /**< --restore or --firmware source, NULL otherwise */
     int calibration;     /**< --restore also writes region 0x40 */
     unsigned rate;       /**< line speed, one uart_open() accepts */
     unsigned timeout_ms; /**< per-call reply deadline */
