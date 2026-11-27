@@ -24,7 +24,6 @@ flash, under unittest and ruff.
 | `include/` | the matching `X.h`; the protocol rules live here and are the copy of record |
 | `tests/` | a model of the radio's flash and the backup/restore tests, no radio needed |
 | `tools/` | helper scripts around the binary — fixture capture, analysis (planned) |
-| `docs/` | one summary per third-party implementation, plus its `README.md` index |
 | `obj/`, `bin/` | build output, gitignored |
 
 One binary, `bin/rt4d-cli`. `tools/` is the only planned directory still
@@ -89,17 +88,11 @@ that sum with `0x48`. A successful write is answered with the single byte
 - Dependency policy: the aim is a build needing nothing beyond libc and POSIX; a
   new dependency has to earn its place.
 
-## Reference implementations
+## Protocol ownership
 
-`docs/` holds one summary per upstream implementation of this protocol, indexed
-by `docs/README.md`. They are third-party projects: not dependencies, not vendored,
-not part of this repository. A claim about one of them belongs in the matching
-file, with the code path that shows it. Read the summary before the upstream
-source, and read either rather than re-deriving — the index arithmetic and the
-region map are exactly the parts that go wrong when guessed at.
-
-The protocol rules the tool implements are owned here, in `include/`, not in
-`docs/`; that text is the copy of record.
+The rules the tool implements live in `include/`, and that text is the copy of
+record. It is written from what the radio does and from dumps taken with this
+tool, not from another project's source.
 
 ## Guiding principles
 

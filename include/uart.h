@@ -3,11 +3,11 @@
  * @brief The serial transport: open the port, move an exact byte count, and
  *        classify a silent peer.
  *
- * Every implementation in docs/ uses 115200 8N1 with no flow control. The line
- * is configured raw because the frames are binary and the kernel must not
- * rewrite a byte on the way. A read deadline covers the whole call rather than
- * each byte, and a timeout stays distinct from a short reply: on the wire they
- * are different faults and the tool reports them differently.
+ * The radio speaks 115200 8N1 with no flow control, which is the default here.
+ * The line is configured raw because the frames are binary and the kernel must
+ * not rewrite a byte on the way. A read deadline covers the whole call rather
+ * than each byte, and a timeout stays distinct from a short reply: on the wire
+ * they are different faults and the tool reports them differently.
  */
 
 #ifndef UART_H
