@@ -33,10 +33,13 @@ half, `firmware.c` (MCU erase and block writes), `tests/`.
 `make` compiles `src/*.c` under `-std=c11 -Wall -Wextra -Wpedantic` into
 `bin/rt4d-cli`; `make help` lists the rest. Style is fixed by `.clang-format`
 (Allman, 4 spaces, 100 columns) and `.clang-tidy` (bugprone, cert, misc and a
-few readability checks).
+few readability checks). The Python tests follow `ruff.toml`: the same 100
+columns, ruff format plus ruff's default lint set, with two rules ignored
+because they describe something these tests do not do. clang-format and ruff are
+gate-time tools, never build dependencies of the binary.
 
-Before a commit: a clean `make`, `make fmt-check` and `make tidy`. `make test`
-arrives with milestone 1. No gate builds or touches the radio.
+Before a commit: a clean `make`, `make fmt-check`, `make tidy` and `make test`.
+No gate builds or touches the radio.
 
 ## Protocol invariants
 
@@ -55,6 +58,13 @@ that sum with `0x48`. A successful write is answered with the single byte
   with distinct messages; a timeout is never reported as a bad checksum.
 - Region writes are the protocol's only write primitive, so a byte-range writer
   cannot be built; refuse any region that ends above `0x400000`.
+- Writing index 0 of a region erases that region's whole span, so a region is
+  written from its start and a wrong index erases the wrong data.
+- Only the 19 commands in `spi.c`'s table are regions. Any other command byte is
+  programmed at address 0 without an erase, clearing bits in the calibration
+  sector; `make test` fails if one is ever sent.
+- A wrong ACK byte is the radio refusing the chunk: stop and say so. A timeout or
+  a short reply is a line fault: drain and retry.
 - The region table is measured fact: it belongs in `spi.c` / `include/spi.h`, and
   it changes only with a fresh dump and read-back as evidence.
 

@@ -1,0 +1,23 @@
+# ruff, for the Python tests only: the tool itself is C.
+#
+# 100 columns is the same budget .clang-format gives the C side, so one width
+# governs the repository. No magic trailing comma: with it, a single trailing
+# comma pins a call open across many lines however short it is; without it,
+# entries stay packed until the 100th column.
+line-length = 100
+target-version = "py310"
+
+[format]
+skip-magic-trailing-comma = true
+
+[lint]
+# The tests are run through `python3 -m unittest`, not executed, and each one
+# asserts on the child's returncode itself, so neither rule describes them.
+ignore = [
+    "EXE001",  # shebang on a non-executable file
+    "PLW1510", # subprocess.run without check=
+]
+
+[lint.isort]
+# Keeps `ruff check` from re-splitting imports the formatter just packed.
+split-on-trailing-comma = false

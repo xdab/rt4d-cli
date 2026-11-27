@@ -3,21 +3,6 @@
 A simple command-line tool for the Radtel RT-4D handheld radio that reads,
 writes and verifies SPI flash, and flashes MCU firmware.
 
-## Status
-
-The port, the frame layer and the whole-image `--backup` are in place: every
-reply is checked and every block is retried before the run fails. Restore and
-the firmware path are not written yet. Background on the existing third-party
-implementations is in [`docs/`](docs/README.md).
-
-| # | Milestone | Scope |
-|---|-----------|-------|
-| 1 | transport | frame building, checksum, ACK/timeout classification — done; tests over recorded frames still to come |
-| 2 | `backup` | linear 4 MiB read, per-block checksum, progress, SHA-256 — done |
-| 3 | `restore` | region-at-a-time write with `--verify` read-back |
-| 4 | `firmware flash`, `firmware backup` | MCU erase and 1 KiB block writes; backup is conditional on the bootloader exposing MCU reads at all |
-| 5 | harness | backup, restore, backup; compare the regions the protocol can write |
-
 ## Why
 
 Existing RT-4D tooling is unmaintained, GUI-only or quietly wrong. The widely
@@ -37,8 +22,10 @@ the tail of every region is never written.
 ## Building
 
 `make` builds `bin/rt4d-cli` with a C compiler and nothing beyond libc and
-POSIX. `make help` lists the targets; `make fmt-check` and `make tidy` are
-formatting and static-analysis gates.
+POSIX. `make help` lists the targets. `make test` drives the binary against a
+modelled radio over a pseudo-terminal — no hardware, no root, no dump — and the
+gates are `make fmt-check` (clang-format for the C, ruff for the Python) and
+`make tidy` (clang-tidy); the C build needs none of the three.
 
 ## Usage
 
@@ -59,3 +46,26 @@ INFO: sha256 7dd15d02...
 backups byte for byte. A backup that fails part way leaves the partial image on
 disk and exits non-zero, so the exit code, not the file, says whether it is
 complete.
+
+```sh
+$ ./bin/rt4d-cli -p /dev/ttyUSB0 --restore -i rt4d-backup.bin
+INFO: restoring rt4d-backup.bin (sha256 7dd15d02...) to /dev/ttyUSB0
+INFO: the radio already holds this image at block 0
+INFO: writing 2236416 bytes in 2184 chunks; calibration skipped (region 0x40 differs between units)
+...
+INFO: read back 2236416 bytes in 240.1 s: identical
+INFO: 1957888 bytes have no region command and were left alone (12 ranges)
+```
+
+## Restore
+
+A dump is linear; a restore is not. The radio accepts writes only per region,
+addressed by the region's command byte and by a chunk index inside it, and the
+19 regions it knows cover 2,236,416 bytes — a little over half the image. Every
+byte of that half is written and then read back and compared; the other half is
+the radio's own backup banks and live message records, which no command can
+address, so those ranges are left as they are and listed at the end.
+
+The calibration sector is region `0x40` and differs between units, so a restore
+skips it unless `--calibration` is given. Writing it is how a radio's own
+calibration is put back.

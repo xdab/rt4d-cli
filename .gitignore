@@ -4,6 +4,9 @@ bin/
 compile_commands.json
 *.o
 *.d
+__pycache__/
+*.pyc
+.ruff_cache/
 
 # System and editor noise
 .DS_Store
