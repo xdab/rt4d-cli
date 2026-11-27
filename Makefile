@@ -10,6 +10,9 @@ OBJ_DIR := obj
 BIN_DIR := bin
 TARGET := $(BIN_DIR)/rt4d-cli
 
+PREFIX ?= /usr/local
+BINDIR := $(PREFIX)/bin
+
 SOURCES := $(wildcard $(SRC_DIR)/*.c)
 OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SOURCES))
 # every C/h file `make fmt` and `make fmt-check` own
@@ -26,6 +29,12 @@ $(TARGET): $(OBJECTS) | $(BIN_DIR)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
+
+.PHONY: install
+install: all
+	install -d $(DESTDIR)$(BINDIR)
+	install -m 755 $(TARGET) $(DESTDIR)$(BINDIR)
+	@echo "✓ Installed to $(DESTDIR)$(BINDIR)"
 
 $(OBJ_DIR) $(BIN_DIR):
 	mkdir -p $@
@@ -91,6 +100,7 @@ help:
 	@echo "rt4d-cli Makefile Targets"
 	@echo "========================="
 	@echo "  all        - Build $(TARGET) (default)"
+	@echo "  install    - Install the binary to $(BINDIR) (PREFIX= and DESTDIR= honored)"
 	@echo "  compdb     - Regenerate $(COMPDB) (editor and clang-tidy input)"
 	@echo "  fmt        - Format src/*.c, include/*.h (clang-format) and tests/*.py (ruff)"
 	@echo "  fmt-check  - Check formatting and lint (gate, nonzero on any finding)"

@@ -34,6 +34,9 @@ $ make
 $ ./bin/rt4d-cli --help
 ```
 
+`make install` copies the binary to `/usr/local/bin` (override with `PREFIX=`;
+`DESTDIR=` for staging).
+
 `make test` runs the tests against a modelled radio over a pseudo-terminal — no
 hardware, no root, no dump needed. `make fmt-check` and `make tidy` are the
 formatting and static-analysis gates.
