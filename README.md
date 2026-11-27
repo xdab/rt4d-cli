@@ -8,7 +8,8 @@ by reading it back.
 
 The repository is a skeleton: `src/main.c` prints one line, and there is no
 protocol, no serial port and no radio code yet. The milestones below are what
-turns it into a tool.
+turns it into a tool. Background on the existing third-party implementations is
+in [`docs/`](docs/README.md).
 
 | # | Milestone | Scope |
 | --- | --- | --- |
@@ -25,8 +26,7 @@ recommended one, the Rust `rt890-flash`, computes each write chunk's index from
 the frame length instead of the payload, so a restore lands about three bytes
 early per kilobyte: fonts, glyphs and voice prompts shift across the image and
 the tail of every region is never written. This tool gets that arithmetic right
-and proves it by reading back. It is also the flashing layer the sibling
-firmware-rebuild project lacks.
+and proves it by reading back.
 
 ## Hardware
 

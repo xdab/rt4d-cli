@@ -8,7 +8,8 @@ The only code is `src/main.c`, which prints one line: no transport, no frame
 builder, no SPI and no firmware path. The Makefile, `.clang-format` and
 `.clang-tidy` are in place and their gates pass, so the skeleton a module plugs
 into is real. `include/` appears with the first module, `tests/` with milestone
-1 (transport plus `dump`).
+1 (transport plus `dump`). `docs/` already holds one technical summary per
+reference implementation, indexed by `docs/README.md`.
 
 ## Layout
 
@@ -18,7 +19,7 @@ into is real. `include/` appears with the first module, `tests/` with milestone
 | `include/` | the matching `X.h`, with the project's documentation (planned) |
 | `tests/` | unit tests over recorded frames and image files, no radio needed (planned) |
 | `tools/` | helper scripts around the binary — fixture capture, analysis (planned) |
-| `docs/` | reference documents, once the protocol outgrows the headers (planned) |
+| `docs/` | one summary per third-party implementation, plus its `README.md` index |
 | `obj/`, `bin/` | build output, gitignored |
 
 One binary, `bin/rt4d-cli`. Modules still to come: `uart.c` (open/close the port,
@@ -26,15 +27,12 @@ byte accurate read/write, timeouts), `frame.c` (frame building, checksum, ACK
 versus timeout versus corruption), `spi.c` (SPI region table, dump, restore),
 `firmware.c` (MCU erase and block writes), `logging.c` (stderr `log_*`).
 
-The layout, plain Makefile and clang gates follow the local `rxx_lora` project
-(`~/Desktop/GitHub/rxx_lora`), so the two repos are navigable alike.
-
 ## Build and gates
 
 `make` compiles `src/*.c` under `-std=c11 -Wall -Wextra -Wpedantic` into
 `bin/rt4d-cli`; `make help` lists the rest. Style is fixed by `.clang-format`
 (Allman, 4 spaces, 100 columns) and `.clang-tidy` (bugprone, cert, misc and a
-few readability checks), both taken from `rxx_lora`.
+few readability checks).
 
 Before a commit: a clean `make`, `make fmt-check` and `make tidy`. `make test`
 arrives with milestone 1. No gate builds or touches the radio.
@@ -47,8 +45,8 @@ that sum with `0x48`. A successful write is answered with the single byte
 `0x06`.
 
 - A write index is the **chunk number**: `(byte offset - region start) / payload
-  length`. Dividing by the frame length instead (payload + 3) is the bug that
-  damaged the owner's radio; it must not come back in any form.
+  length`. Dividing by the frame length instead (payload + 3) misplaces every
+  chunk of a restore; it must not come back in any form.
 - A read index is a 1 KiB block number and reads are whole-image; writes are
   region-relative. Different notions, different variables.
 - A read reply whose header byte is `0xFF` is an error, not data.
@@ -56,8 +54,8 @@ that sum with `0x48`. A successful write is answered with the single byte
   with distinct messages; a timeout is never reported as a bad checksum.
 - Region writes are the protocol's only write primitive, so a byte-range writer
   cannot be built; refuse any region that ends above `0x400000`.
-- The region table is measured fact: it lives in `spi.c` / `include/spi.h` and
-  changes only with a fresh dump and read-back as evidence.
+- The region table is measured fact: it belongs in `spi.c` / `include/spi.h`, and
+  it changes only with a fresh dump and read-back as evidence.
 
 ## Constraints
 
@@ -68,22 +66,18 @@ that sum with `0x48`. A successful write is answered with the single byte
   above the codeplug, and padding an image out to the chip size destroys it.
 - Dependency policy: the aim is a build needing nothing beyond libc and POSIX; a
   new dependency has to earn its place.
-- `horizon.md` is local scratch — gitignored, never committed, never cited from
-  tracked docs. The durable facts it carries move into `docs/` and the headers,
-  and the header text is the copy of record once it lands.
 
-## Reference material outside this repo
+## Reference implementations
 
-- `~/Desktop/Forgejo/rt4d` — the firmware RE project that owns the radio facts:
-  `SPI-FLASH.md` (region map, settings banks, calibration), `FLASHING.md` (MCU
-  payload at `0x08002800`, bootloader bounds, PTT upgrade mode), `HARDWARE.md`
-  (cable, pinmap, chips) and `references/` (prior art).
-- `~/.local/bin/rt890-flash-fixed` — the patched Rust flasher that already
-  restored the owner's radio; the behaviour to reproduce, superseded by this
-  tool.
+`docs/` holds one summary per upstream implementation of this protocol, indexed
+by `docs/README.md`. They are third-party projects: not dependencies, not vendored,
+not part of this repository. A claim about one of them belongs in the matching
+file, with the code path that shows it. Read the summary before the upstream
+source, and read either rather than re-deriving — the index arithmetic and the
+region map are exactly the parts that go wrong when guessed at.
 
-Read them rather than re-deriving: the arithmetic and the region map are exactly
-the parts that go wrong when guessed at.
+The protocol rules the tool implements are owned here, in `include/`, not in
+`docs/`; that text is the copy of record.
 
 ## Glossary
 
