@@ -8,7 +8,6 @@ status, its message, and the modelled flash afterwards.
 Run with `make test`, `python3 -m unittest discover -s tests -v`, or this file.
 """
 
-import hashlib
 import os
 import subprocess
 import sys
@@ -17,6 +16,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import radio
+from support import digest, first_difference
 
 BIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bin", "rt4d-cli")
 CLI_TIMEOUT = 60
@@ -35,18 +35,6 @@ NOT_A_DUMP_BYTES = radio.BLOCK
 FAULT_BAD_ACK_AT = 500  # inside region 0x9C
 FAULT_CORRUPT_AT = 900  # inside region 0xA1
 FAULT_SILENT_AT = 300  # inside region 0x94
-
-
-def first_difference(mask, flash, image):
-    """The first address @p mask covers where @p flash and @p image disagree."""
-    for address in range(radio.IMAGE_BYTES):
-        if mask[address] and flash[address] != image[address]:
-            return address
-    return None
-
-
-def digest(data):
-    return hashlib.sha256(bytes(data)).hexdigest()
 
 
 class Restore(unittest.TestCase):

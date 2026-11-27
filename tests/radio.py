@@ -37,6 +37,7 @@ INDEX_LOW = 2
 HEADER_BYTES = 3
 PAYLOAD_AT = HEADER_BYTES
 CHECKSUM_AT = HEADER_BYTES + BLOCK
+REPLY_BYTES = CHECKSUM_AT + 1
 
 # The region whose bytes differ between units.
 CALIBRATION = 0x40
@@ -47,6 +48,15 @@ CORRUPT = "corrupt"
 SILENT = "silent"
 NOT_ACK = 0x00
 CHECKSUM_ERROR = 0x15
+
+# Read-side faults: a reply that arrives corrupt, stops mid-frame, is refused, or
+# never arrives.
+READ_CHECKSUM = "read-checksum"
+READ_SHORT = "read-short"
+READ_REFUSED = "read-refused"
+READ_SILENT = "read-silent"
+BOOTLOADER = 0xFF  # first reply byte of a radio in its flashing mode
+SHORT_REPLY_BYTES = 100
 
 # Timing, in seconds: how long the serving thread sleeps between polls and how
 # long teardown waits for it to notice.
@@ -122,10 +132,11 @@ def addressable(image, calibration=True):
 class Radio:
     """A pty whose other end behaves like the radio's flash."""
 
-    def __init__(self, flash, fault=None, fault_at=0):
+    def __init__(self, flash, fault=None, fault_at=0, persistent=True):
         self.flash = flash
         self.fault = fault
         self.fault_at = fault_at
+        self.persistent = persistent
         self.reads = 0
         self.writes = 0
         self.region_writes = 0
@@ -163,11 +174,26 @@ class Radio:
             buf += chunk
         return buf if len(buf) == count else None
 
+    def _fault_now(self, count):
+        return count >= self.fault_at if self.persistent else count == self.fault_at
+
     def _read_reply(self, block):
         self.reads += 1
         payload = bytes(self.flash[block * BLOCK : (block + 1) * BLOCK])
         header = bytes([CMD_READ]) + bytes([(block >> 8) & BYTE_MASK, block & BYTE_MASK])
-        return header + payload + bytes([_checksum(header + payload)])
+        reply = header + payload + bytes([_checksum(header + payload)])
+        # a read fault is named by the block it hits, so counts start at block 0
+        if not self._fault_now(self.reads - 1):
+            return reply
+        if self.fault == READ_CHECKSUM:
+            return reply[:-1] + bytes([(reply[-1] + 1) & BYTE_MASK])
+        if self.fault == READ_SHORT:
+            return reply[:SHORT_REPLY_BYTES]
+        if self.fault == READ_REFUSED:
+            return bytes([BOOTLOADER])
+        if self.fault == READ_SILENT:
+            return None
+        return reply
 
     def _answer_write(self, frame):
         self.writes += 1
@@ -187,12 +213,13 @@ class Radio:
         for offset, value in enumerate(data):
             self.flash[address + offset] &= value
         self.region_writes += 1
-        if self.fault == BAD_ACK and self.writes >= self.fault_at:
-            return bytes([NOT_ACK])
         if self.fault == CORRUPT and self.writes == self.fault_at:
             self.flash[address] ^= BYTE_MASK
-        if self.fault == SILENT and self.writes >= self.fault_at:
-            return None
+        elif self._fault_now(self.writes):
+            if self.fault == BAD_ACK:
+                return bytes([NOT_ACK])
+            if self.fault == SILENT:
+                return None
         return bytes([ACK])
 
     def _serve(self):
