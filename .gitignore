@@ -1,0 +1,26 @@
+# Build artifacts
+obj/
+bin/
+compile_commands.json
+*.o
+*.d
+
+# System and editor noise
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Local captures and dumps of the radio: large, personal, never source
+*.spi
+*.cf32
+
+# Root markdown is scratch (agent notes, horizon.md); the project's own
+# pages are the only tracked ones
+/*.md
+!/README.md
+!/AGENTS.md
+!/TODOS.md
+!/LICENSE.md
