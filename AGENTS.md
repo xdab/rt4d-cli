@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`README.md` is the human front page; this one is for agents. Read it first.
+`README.md` is the human front page; this one is for agents.
 
 ## State
 
@@ -14,7 +14,7 @@ reference implementation, indexed by `docs/README.md`.
 ## Layout
 
 | Path | Holds |
-| --- | --- |
+|------|-------|
 | `src/` | C sources, one module per file pair; currently `main.c` only |
 | `include/` | the matching `X.h`, with the project's documentation (planned) |
 | `tests/` | unit tests over recorded frames and image files, no radio needed (planned) |
@@ -78,23 +78,6 @@ region map are exactly the parts that go wrong when guessed at.
 
 The protocol rules the tool implements are owned here, in `include/`, not in
 `docs/`; that text is the copy of record.
-
-## Glossary
-
-- **SPI flash** — the external part holding calibration, codeplug and image
-  blobs; the tool's main subject.
-- **codeplug** — the user-facing configuration: settings, channels, zones,
-  contacts, call log.
-- **region** — a flash range the bootloader exposes for writing under one id
-  (`0x40`–`0xA3`), with its own offset and size.
-- **chunk** — one 1 KiB write unit inside a region; its index is counted from
-  the region start.
-- **dump** / **restore** — a linear 4 MiB read into a file / writing the mapped
-  regions back out of such a file.
-- **MCU firmware** — the AT32F423 application image starting at `0x08002800`,
-  never including the bootloader below it.
-- **upgrade mode** — power-on with PTT held; the only mode that accepts MCU
-  writes.
 
 ## Guiding principles
 
