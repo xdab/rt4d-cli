@@ -14,8 +14,10 @@ CheckOptions:
   # glibc's public headers (stdio.h, getopt.h, time.h) are thin wrappers over
   # bits/ internals, but include-cleaner can't walk up to the public header and
   # suggests the non-self-contained bits/ files directly. Never suggest those;
-  # where the public header still trips the check, a
-  # // NOLINT(misc-include-cleaner) sits on the include line.
+  # where the public header still trips the check (<errno.h> names, <poll.h>
+  # types), the NOLINT(misc-include-cleaner) goes on the use site or spans the
+  # file - one on the include line does not suppress a diagnostic reported at
+  # the use.
   - key: misc-include-cleaner.IgnoreHeaders
     value: 'bits/.*'
 # bugprone-signed-bitwise is off: the protocol code bit-packs frame bytes and

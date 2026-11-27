@@ -13,9 +13,12 @@ compile_commands.json
 .vscode/
 .idea/
 
-# Local captures and dumps of the radio: large, personal, never source
+# Local runs and dumps of the radio: large, personal, never source
 *.spi
 *.cf32
+*.log
+*.pid
+rt4d-*.bin
 
 # Root markdown is scratch (agent notes, horizon.md); the project's own
 # pages are the only tracked ones
