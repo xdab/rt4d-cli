@@ -5,6 +5,7 @@
 #include "frame.h"
 
 #include <stdio.h>
+#include <string.h>
 
 unsigned char frame_checksum(const unsigned char *bytes, size_t len)
 {
@@ -57,3 +58,19 @@ const char *frame_reply_status_name(enum frame_reply_status status)
     }
     return "unknown";
 }
+
+// NOLINTBEGIN(bugprone-easily-swappable-parameters) // command and index are the wire's pair
+size_t frame_write_request(
+    unsigned char command,
+    unsigned index,
+    const unsigned char *data,
+    unsigned char out[FRAME_WRITE_BYTES])
+{
+    out[0] = command;
+    out[1] = (unsigned char)((index >> 8) & 0xFFu);
+    out[2] = (unsigned char)(index & 0xFFu);
+    (void)memcpy(out + 3, data, FRAME_BLOCK_BYTES);
+    out[FRAME_WRITE_BYTES - 1] = frame_checksum(out, FRAME_WRITE_BYTES - 1);
+    return FRAME_WRITE_BYTES;
+}
+// NOLINTEND(bugprone-easily-swappable-parameters)

@@ -248,6 +248,8 @@ const char *uart_status_name(enum uart_status status)
     return "unknown";
 }
 
+void uart_set_timeout(struct uart *u, unsigned timeout_ms) { u->timeout_ms = timeout_ms; }
+
 void uart_close(struct uart *u)
 {
     if (u->fd >= 0)

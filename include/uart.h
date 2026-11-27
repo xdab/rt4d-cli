@@ -69,6 +69,15 @@ enum uart_status uart_write(struct uart *u, const void *buf, size_t len, size_t 
 const char *uart_status_name(enum uart_status status);
 
 /**
+ * Change the read deadline for later calls.
+ *
+ * A region write answers only once the radio has erased the whole span, which
+ * for a large region takes seconds; the caller raises the deadline for that one
+ * chunk and puts it back afterwards.
+ */
+void uart_set_timeout(struct uart *u, unsigned timeout_ms);
+
+/**
  * Discard input until the line has been quiet for @p quiet_ms, or until
  * @p max_bytes have been dropped.
  */

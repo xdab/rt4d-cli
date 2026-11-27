@@ -23,6 +23,8 @@ enum
     OPT_BAUD = 256,
     OPT_CHECK,
     OPT_BACKUP,
+    OPT_RESTORE,
+    OPT_CALIBRATION,
 };
 
 static void usage(void)
@@ -32,12 +34,18 @@ static void usage(void)
         APP_NAME ", SPI flash and MCU firmware tool for the Radtel RT-4D\n"
                  "\n"
                  "Use:\t" APP_NAME " -p DEVICE --backup -o FILE\n"
+                 "\t" APP_NAME " -p DEVICE --restore -i FILE\n"
                  "\t" APP_NAME " -p DEVICE --check\n"
                  "\t--backup           read the whole 4 MiB SPI flash into -o FILE\n"
+                 "\t--restore          write -i FILE back region by region, then read\n"
+                 "\t                   every written byte back and compare it\n"
                  "\t--check            open the port, report its settings, close it;\n"
                  "\t                   sends nothing to the radio\n"
                  "\t-p, --port DEVICE  serial port the radio is on (/dev/ttyUSB0)\n"
                  "\t-o, --output FILE  --backup destination, overwritten\n"
+                 "\t-i, --input FILE   --restore source, a whole 4 MiB dump\n"
+                 "\t    --calibration  --restore also writes region 0x40, whose bytes\n"
+                 "\t                   differ between radios\n"
                  "\t-t, --timeout SEC  reply deadline in seconds (default: 5; a bare\n"
                  "\t                   number is already seconds, s/m/h suffixes\n"
                  "\t                   are accepted)\n"
@@ -109,6 +117,8 @@ enum options_status options_parse(int argc, char **argv, struct options *o)
     o->action = ACTION_NONE;
     o->port = NULL;
     o->output = NULL;
+    o->input = NULL;
+    o->calibration = 0;
     o->rate = UART_RATE_DEFAULT;
     o->timeout_ms = (unsigned)(REPLY_TIMEOUT_DEFAULT * 1000.0 + 0.5);
 
@@ -118,8 +128,11 @@ enum options_status options_parse(int argc, char **argv, struct options *o)
     static const struct option long_opts[] = {
         {"port", required_argument, NULL, 'p'},
         {"output", required_argument, NULL, 'o'},
+        {"input", required_argument, NULL, 'i'},
         {"check", no_argument, NULL, OPT_CHECK},
         {"backup", no_argument, NULL, OPT_BACKUP},
+        {"restore", no_argument, NULL, OPT_RESTORE},
+        {"calibration", no_argument, NULL, OPT_CALIBRATION},
         {"timeout", required_argument, NULL, 't'},
         {"baud", required_argument, NULL, OPT_BAUD},
         {"help", no_argument, NULL, 'h'},
@@ -127,7 +140,7 @@ enum options_status options_parse(int argc, char **argv, struct options *o)
     };
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "p:o:t:v::q::h", long_opts, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "p:o:i:t:v::q::h", long_opts, NULL)) != -1)
     {
         switch (opt)
         {
@@ -137,11 +150,20 @@ enum options_status options_parse(int argc, char **argv, struct options *o)
         case 'o':
             o->output = optarg;
             break;
+        case 'i':
+            o->input = optarg;
+            break;
         case OPT_CHECK:
             o->action = ACTION_CHECK;
             break;
         case OPT_BACKUP:
             o->action = ACTION_BACKUP;
+            break;
+        case OPT_RESTORE:
+            o->action = ACTION_RESTORE;
+            break;
+        case OPT_CALIBRATION:
+            o->calibration = 1;
             break;
         case 't':
             timeout_s = parse_duration(optarg);
@@ -176,6 +198,21 @@ enum options_status options_parse(int argc, char **argv, struct options *o)
     if (o->action == ACTION_BACKUP && !o->output)
     {
         log_error("no output file given (use -o FILE)\n");
+        return OPTIONS_USAGE;
+    }
+    if (o->action == ACTION_RESTORE && !o->input)
+    {
+        log_error("no input file given (use -i FILE)\n");
+        return OPTIONS_USAGE;
+    }
+    if (o->action != ACTION_RESTORE && o->input)
+    {
+        log_error("input is only used by --restore\n");
+        return OPTIONS_USAGE;
+    }
+    if (o->action != ACTION_RESTORE && o->calibration)
+    {
+        log_error("--calibration is only used by --restore\n");
         return OPTIONS_USAGE;
     }
     if (o->action != ACTION_BACKUP && o->output)

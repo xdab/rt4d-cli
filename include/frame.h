@@ -24,6 +24,12 @@
 /** Command byte of a block read. */
 #define FRAME_CMD_READ_SPI 0x52
 
+/** The single byte a successful write is answered with. */
+#define FRAME_ACK 0x06
+
+/** Bytes of a write frame: three header bytes, one block, one checksum. */
+#define FRAME_WRITE_BYTES (3u + FRAME_BLOCK_BYTES + 1u)
+
 /** First reply byte of a radio in its flashing mode: it cannot read flash. */
 #define FRAME_REPLY_BOOTLOADER 0xFF
 
@@ -32,6 +38,18 @@ unsigned char frame_checksum(const unsigned char *bytes, size_t len);
 
 /** Build `52 blkH blkL checksum` for @p block; returns the frame length. */
 size_t frame_read_request(unsigned block, unsigned char out[FRAME_REQUEST_BYTES]);
+
+/**
+ * Build `command idxH idxL data checksum` for one block of @p data.
+ *
+ * @p index counts payload-length chunks from the start of the region the
+ * command addresses, and @p data is exactly FRAME_BLOCK_BYTES long.
+ */
+size_t frame_write_request(
+    unsigned char command,
+    unsigned index,
+    const unsigned char *data,
+    unsigned char out[FRAME_WRITE_BYTES]);
 
 /** Why a read reply was rejected. */
 enum frame_reply_status
