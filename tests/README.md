@@ -6,10 +6,11 @@ not.
 
 | Path | Contents |
 | --- | --- |
-| [radio.py](radio.py) | The model: flash contents, erase and program semantics, the region table, the pty responder, and the faults a test can inject on either side. |
+| [radio.py](radio.py) | The models: `Radio` for the SPI flash (contents, erase and program semantics, the region table) and `Bootloader` for the MCU (probe, erase frames, offset wrap), plus the faults a test can inject on either side. |
 | [support.py](support.py) | Two helpers the test modules share: a digest, and the first address where two images disagree. |
 | [test_backup.py](test_backup.py) | `--backup` cases: the whole flash, a block that arrives corrupt, a short reply, silence part way, a refusal on block 0, a missing `-o`, and a backup → restore → backup round trip. |
 | [test_restore.py](test_restore.py) | `--restore` cases: whole-image write, calibration opt-in, idempotence, bad ACK, a write that lands wrong, silence on the line, argument handling. |
+| [test_firmware.py](test_firmware.py) | `--firmware` cases: a whole image, the wrapping offset field, zero padding, an oversized image, a radio not in firmware mode, a silent erase, a bad ACK mid-write, a missing `-i`. |
 
 ## Running
 

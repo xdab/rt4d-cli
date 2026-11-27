@@ -1,18 +1,21 @@
-"""A pseudo-terminal stand-in for the RT-4D's SPI flash, for tests without a radio.
+"""Pseudo-terminal stand-ins for the RT-4D, for tests without a radio.
 
-The model follows the write contract in include/spi.h:
+Two conversations are modelled, both following the contracts in include/:
 
-* a command in REGIONS erases its whole span when the index is 0, then programs
-  the 1 KiB chunk at ``base + index * 1024`` (NOR semantics: programming only
-  clears bits, so a write without an erase ands into what is there);
-* a command outside REGIONS is unknown to the radio and programs at address 0
-  without erasing — the failure mode that damages the calibration sector;
-* a read answers ``52 blkH blkL`` with three header bytes, 1024 data bytes and a
-  checksum;
-* a write is answered with ``06``.
+``Radio`` is the SPI flash in normal mode. A command in REGIONS erases its whole
+span when the index is 0, then programs the 1 KiB chunk at ``base + index *
+1024`` (NOR semantics: programming only clears bits, so a write without an erase
+ands into what is there). A command outside REGIONS is unknown to the radio and
+programs at address 0 without erasing — the failure mode that damages the
+calibration sector. A read answers ``52 blkH blkL``, a write is answered with
+``06``.
 
-The table is a separate copy on purpose: if the tool's table drifts, these tests
-fail instead of agreeing with it.
+``Bootloader`` is the MCU flash in firmware mode: a probe, two erase frames, then
+1 KiB writes whose offset field wraps every 64 KiB, every frame checksummed with
+the 0x48 seed.
+
+The region table is a separate copy on purpose: if the tool's table drifts, these
+tests fail instead of agreeing with it.
 """
 
 import os
@@ -42,6 +45,20 @@ REPLY_BYTES = CHECKSUM_AT + 1
 # The region whose bytes differ between units.
 CALIBRATION = 0x40
 
+# The MCU side: the bootloader's own conversation.
+CMD_ERASE_FW = 0x39
+CMD_WRITE_FW = 0x57
+SEED_FIRMWARE = 0x48
+FW_IMAGE_BYTES = 0x3D800
+FW_BLOCKS = FW_IMAGE_BYTES // BLOCK
+FW_MODE_BYTE = 0xFF
+NOT_FIRMWARE_MODE = CMD_READ
+ERASE_SETUP = 0x10
+ERASE_TRIGGER = 0x55
+ERASE_BYTES = 5
+ERASE_FIXED = (0x33, 0x05)
+OFFSET_MASK = 0xFFFF
+
 # Faults a test can inject, and the answers that go with them.
 BAD_ACK = "badack"
 CORRUPT = "corrupt"
@@ -66,6 +83,7 @@ JOIN_SECONDS = 2.0
 # Seeds for the two fixtures, so every run models the same bytes.
 NOISE_SEED = 1234
 IMAGE_SEED = 99
+FIRMWARE_SEED = 7
 
 # command byte -> (first address it writes, span its erase covers)
 REGIONS = {
@@ -95,6 +113,10 @@ def _checksum(data):
     return sum(data) & BYTE_MASK
 
 
+def _firmware_checksum(data):
+    return (sum(data) + SEED_FIRMWARE) & BYTE_MASK
+
+
 def _be16(high, low):
     """The 16-bit big-endian value of two bytes: a block or chunk index."""
     return (high << 8) | low
@@ -119,6 +141,12 @@ def image_with_data(seed=IMAGE_SEED):
     return bytes(image)
 
 
+def firmware_image(seed=FIRMWARE_SEED, size=FW_IMAGE_BYTES):
+    """A stand-in firmware image of exactly @p size bytes."""
+    rng = random.Random(seed)
+    return bytes(rng.getrandbits(8) for _ in range(size))
+
+
 def addressable(image, calibration=True):
     """A mask of the bytes some region command can write."""
     mask = bytearray(IMAGE_BYTES)
@@ -129,18 +157,14 @@ def addressable(image, calibration=True):
     return mask
 
 
-class Radio:
-    """A pty whose other end behaves like the radio's flash."""
+class _Closed(Exception):
+    """The peer closed the pty."""
 
-    def __init__(self, flash, fault=None, fault_at=0, persistent=True):
-        self.flash = flash
-        self.fault = fault
-        self.fault_at = fault_at
-        self.persistent = persistent
-        self.reads = 0
-        self.writes = 0
-        self.region_writes = 0
-        self.unknown = []
+
+class _Pty:
+    """A pty with a serving thread that answers frames; subclasses answer them."""
+
+    def __init__(self):
         self._stop = threading.Event()
         self._master, self._slave = pty.openpty()
         self.port = os.ttyname(self._slave)
@@ -159,20 +183,49 @@ class Radio:
                 pass
         self._thread.join(timeout=JOIN_SECONDS)
 
-    def addressable_bytes(self, calibration=True):
-        return addressable(self.flash, calibration)
-
     def _read_exact(self, count):
         buf = b""
         while len(buf) < count and not self._stop.is_set():
             try:
                 chunk = os.read(self._master, count - len(buf))
-            except OSError:  # the peer closed the pty
-                return None
+            except OSError as exc:  # the peer closed the pty
+                raise _Closed from exc
             if not chunk:
-                return None
+                raise _Closed
             buf += chunk
-        return buf if len(buf) == count else None
+        if len(buf) != count:
+            raise _Closed
+        return buf
+
+    def _handle_frame(self):
+        raise NotImplementedError
+
+    def _serve(self):
+        while not self._stop.is_set():
+            readable, _, _ = select.select([self._master], [], [], POLL_SECONDS)
+            if not readable:
+                continue
+            try:
+                reply = self._handle_frame()
+            except _Closed:
+                return
+            if reply:
+                os.write(self._master, reply)
+
+
+class Radio(_Pty):
+    """The SPI flash in normal mode."""
+
+    def __init__(self, flash, fault=None, fault_at=0, persistent=True):
+        super().__init__()
+        self.flash = flash
+        self.fault = fault
+        self.fault_at = fault_at
+        self.persistent = persistent
+        self.reads = 0
+        self.writes = 0
+        self.region_writes = 0
+        self.unknown = []
 
     def _fault_now(self, count):
         return count >= self.fault_at if self.persistent else count == self.fault_at
@@ -222,24 +275,77 @@ class Radio:
                 return None
         return bytes([ACK])
 
-    def _serve(self):
-        while not self._stop.is_set():
-            readable, _, _ = select.select([self._master], [], [], POLL_SECONDS)
-            if not readable:
-                continue
-            first = self._read_exact(1)
-            if not first:
-                return
-            if first[0] == CMD_READ:
-                rest = self._read_exact(HEADER_BYTES)
-                if not rest:
-                    return
-                frame = first + rest
-                reply = self._read_reply(_be16(frame[INDEX_HIGH], frame[INDEX_LOW]))
-            else:
-                rest = self._read_exact(HEADER_BYTES + BLOCK)
-                if not rest:
-                    return
-                reply = self._answer_write(first + rest)
-            if reply is not None:
-                os.write(self._master, reply)
+    def _handle_frame(self):
+        first = self._read_exact(1)
+        if first[0] == CMD_READ:
+            frame = first + self._read_exact(HEADER_BYTES)
+            return self._read_reply(_be16(frame[INDEX_HIGH], frame[INDEX_LOW]))
+        return self._answer_write(first + self._read_exact(HEADER_BYTES + BLOCK))
+
+
+class Bootloader(_Pty):
+    """The MCU flash in firmware mode: probe, erase, 1 KiB writes."""
+
+    def __init__(self, firmware_mode=True, fault=None, fault_at=0, persistent=True):
+        super().__init__()
+        self.flash = bytearray([ERASED]) * FW_IMAGE_BYTES
+        self.firmware_mode = firmware_mode
+        self.fault = fault
+        self.fault_at = fault_at
+        self.persistent = persistent
+        self.frames = 0  # erase and write frames the bootloader was asked to ack
+        self.erases = []  # the parts sent, in order
+        self.offsets = []  # the offset field of each write, as it arrives
+        self.blocks = 0  # blocks programmed, counted by the bootloader itself
+        self.bad_checksums = 0
+
+    def _fault_now(self):
+        return self.frames >= self.fault_at if self.persistent else self.frames == self.fault_at
+
+    def _answer(self, reply=bytes([ACK])):
+        """The answer to an erase or write frame, or None to stay silent."""
+        self.frames += 1
+        if not self._fault_now():
+            return reply
+        if self.fault == BAD_ACK:
+            return bytes([NOT_ACK])
+        if self.fault == SILENT:
+            return None
+        return reply
+
+    def _probe(self, frame):
+        if _firmware_checksum(frame[:3]) != frame[3]:
+            self.bad_checksums += 1
+        if not self.firmware_mode:
+            return bytes([NOT_FIRMWARE_MODE])
+        return bytes([FW_MODE_BYTE])
+
+    def _erase(self, frame):
+        if _firmware_checksum(frame[:4]) != frame[4]:
+            self.bad_checksums += 1
+            return bytes([CHECKSUM_ERROR])
+        if (frame[1], frame[2]) != ERASE_FIXED:
+            self.bad_checksums += 1
+            return bytes([CHECKSUM_ERROR])
+        self.erases.append(frame[3])
+        self.flash = bytearray([ERASED]) * FW_IMAGE_BYTES
+        self.blocks = 0
+        return self._answer()
+
+    def _write(self, frame):
+        if _firmware_checksum(frame[:CHECKSUM_AT]) != frame[CHECKSUM_AT]:
+            self.bad_checksums += 1
+            return bytes([CHECKSUM_ERROR])
+        self.offsets.append(_be16(frame[INDEX_HIGH], frame[INDEX_LOW]))
+        address = self.blocks * BLOCK  # the bootloader counts blocks itself
+        self.flash[address : address + BLOCK] = frame[PAYLOAD_AT:CHECKSUM_AT]
+        self.blocks += 1
+        return self._answer()
+
+    def _handle_frame(self):
+        first = self._read_exact(1)
+        if first[0] == CMD_READ:
+            return self._probe(first + self._read_exact(HEADER_BYTES))
+        if first[0] == CMD_ERASE_FW:
+            return self._erase(first + self._read_exact(ERASE_BYTES - 1))
+        return self._write(first + self._read_exact(HEADER_BYTES + BLOCK))
