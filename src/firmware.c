@@ -6,6 +6,7 @@
 
 #include <errno.h>
 #include <string.h>
+#include <time.h>
 
 #include "frame.h"
 #include "logging.h"
@@ -14,7 +15,9 @@
 #define ATTEMPTS 3
 #define DRAIN_QUIET_MS 100
 #define DRAIN_MAX_BYTES (2u * FRAME_REPLY_BYTES)
-#define PROGRESS_BLOCKS 32u
+// ten blocks is about one second of traffic at 115200 8N1, so a progress line
+// lands roughly once a second on every operation
+#define PROGRESS_BLOCKS 10u
 
 // the two halves of the erase: the same frame but for this byte
 #define ERASE_PART_SETUP 0x10u
@@ -158,6 +161,14 @@ static int erase(struct uart *u)
     return 0;
 }
 
+static double monotonic_s(void)
+{
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+        return 0.0;
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
+
 int firmware_flash(struct uart *u, const unsigned char *image, size_t len)
 {
     unsigned char frame[FRAME_WRITE_BYTES];
@@ -182,6 +193,8 @@ int firmware_flash(struct uart *u, const unsigned char *image, size_t len)
         FW_BLOCKS,
         FW_BLOCK_BYTES,
         len < FW_IMAGE_BYTES ? ", padded with zeros" : "");
+
+    double started = monotonic_s();
 
     for (unsigned block = 0; block < FW_BLOCKS; block++)
     {
@@ -208,11 +221,24 @@ int firmware_flash(struct uart *u, const unsigned char *image, size_t len)
         }
 
         if ((block + 1) % PROGRESS_BLOCKS == 0)
-            log_info("%u%% (%u/%u blocks)\n", (block + 1) * 100u / FW_BLOCKS, block + 1, FW_BLOCKS);
+        {
+            double elapsed = monotonic_s() - started;
+            // every block is 1 KiB, so blocks done is KiB done
+            log_info(
+                "%u%% (%u/%u blocks), %.0f KiB/s\n",
+                (block + 1) * 100u / FW_BLOCKS,
+                block + 1,
+                FW_BLOCKS,
+                elapsed > 0.0 ? (double)(block + 1) / elapsed : 0.0);
+        }
     }
 
+    double elapsed = monotonic_s() - started;
     log_info(
-        "%u blocks acknowledged; MCU flash cannot be read back, so the count is the evidence\n",
-        FW_BLOCKS);
+        "%u blocks acknowledged in %.1f s (%.0f KiB/s); "
+        "MCU flash cannot be read back, so the count is the evidence\n",
+        FW_BLOCKS,
+        elapsed,
+        elapsed > 0.0 ? (double)FW_IMAGE_BYTES / 1024.0 / elapsed : 0.0);
     return 0;
 }

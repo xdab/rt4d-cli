@@ -56,8 +56,8 @@ INFO: closed /dev/ttyUSB0
 ```sh
 $ ./bin/rt4d-cli -p /dev/ttyUSB0 --backup -o rt4d-backup.bin
 INFO: backing up 4 MiB from /dev/ttyUSB0 to rt4d-backup.bin
-INFO: 6% (256/4096 blocks), 9 KiB/s
-INFO: 100% (4096/4096 blocks), 9 KiB/s
+INFO: 25% (1024/4096 blocks), 9 KiB/s
+...
 INFO: 4194304 bytes in 454.2 s (9 KiB/s)
 INFO: sha256 30d14afe...
 ```
@@ -74,7 +74,7 @@ $ ./bin/rt4d-cli -p /dev/ttyUSB0 --restore -i rt4d-backup.bin
 INFO: restoring rt4d-backup.bin (sha256 30d14afe...) to /dev/ttyUSB0
 INFO: writing 2236416 bytes in 2184 chunks; calibration skipped (region 0x40 differs between units)
 ...
-INFO: read back 2236416 bytes in 240.1 s: identical
+INFO: read back 2236416 bytes in 240.1 s (9 KiB/s): identical
 INFO: 1957888 bytes have no region command and were left alone (12 ranges)
 INFO:   0x001000-0x002000     4 KiB
 INFO:   0x003000-0x004000     4 KiB
@@ -101,7 +101,8 @@ INFO: flashing rt4d.bin (251904 bytes) over /dev/ttyUSB0
 INFO: the radio is in its firmware mode
 INFO: MCU flash erased
 INFO: writing 246 blocks of 1024 bytes
-INFO: 246 blocks acknowledged; MCU flash cannot be read back, so the count is the evidence
+INFO: 52% (130/246 blocks), 9 KiB/s
+INFO: 246 blocks acknowledged in 27.3 s (9 KiB/s); MCU flash cannot be read back, so the count is the evidence
 ```
 
 The image is at most 251,904 bytes and a shorter one is padded with zeros,

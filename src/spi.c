@@ -17,7 +17,9 @@
 #define ATTEMPTS 3
 #define DRAIN_QUIET_MS 100
 #define DRAIN_MAX_BYTES (2u * FRAME_REPLY_BYTES)
-#define PROGRESS_BLOCKS 256u
+// ten blocks is about one second of traffic at 115200 8N1, so a progress line
+// lands roughly once a second on every operation
+#define PROGRESS_BLOCKS 10u
 
 struct attempt
 {
@@ -529,7 +531,11 @@ int spi_restore(struct uart *u, const unsigned char *image, size_t len, int incl
     }
 
     double read = monotonic_s() - p.started;
-    log_info("read back %lu bytes in %.1f s: identical\n", p.bytes_done, read);
+    log_info(
+        "read back %lu bytes in %.1f s (%.0f KiB/s): identical\n",
+        p.bytes_done,
+        read,
+        read > 0.0 ? (double)p.bytes_done / 1024.0 / read : 0.0);
 
     report_gaps(table, count);
 
